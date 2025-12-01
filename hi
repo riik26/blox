@@ -1,39 +1,33 @@
--- TRUE SILENT HITBOX EXPANDER 2025 (NO FREEZE, NO INVISIBLE, NO DETECTION)
--- Cara kerja: HANYA ubah property Massless + CollisionFidelity pada Head & HumanoidRootPart
--- Ini adalah metode yang dipakai semua executor top (Synapse, Script-Ware, KRNL) saat ini.
--- Tidak ada part baru, tidak ada weld, tidak ada resize → anti-cheat langsung lolos.
+-- TRUE SILENT HITBOX EXPANDER 2025 (NO HTTP, NO FREEZE, NO INVISIBLE)
+-- Hanya ubah Head + HumanoidRootPart → paling aman & tidak terdeteksi
 
-getgenv().Hitbox = getgenv().Hitbox or {
+getgenv().Hitbox = {
     Enabled = false,
     Size = 20,
     TeamCheck = true,
-    Transparency = 1,     -- 1 = invisible (recommended), 0.7 = bisa lihat sedikit
+    Transparency = 1,        -- 1 = tak terlihat (paling aman), 0.6 = agak kelihatan (debug)
 }
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
+-- Core function (hanya 2 part)
 local function expand(plr)
-    if not getgenv().Hitbox.Enabled then return end
-    if plr == LocalPlayer then return end
+    if not getgenv().Hitbox.Enabled or plr == LocalPlayer then return end
     if getgenv().Hitbox.TeamCheck and plr.Team == LocalPlayer.Team then return end
 
-    local char = plr.Character
-    if not char then return end
-
+    local char = plr.Character or plr.CharacterAdded:Wait()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local head = char:FindFirstChild("Head")
-    
+
     if hrp then
         hrp.Size = Vector3.new(getgenv().Hitbox.Size, getgenv().Hitbox.Size, getgenv().Hitbox.Size)
         hrp.Transparency = getgenv().Hitbox.Transparency
         hrp.CanCollide = false
         hrp.Massless = true
-        -- Ini yang paling penting biar anti-cheat gak ngeh
-        hrp.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
     end
-
     if head then
         head.Size = Vector3.new(getgenv().Hitbox.Size, getgenv().Hitbox.Size, getgenv().Hitbox.Size)
         head.Transparency = getgenv().Hitbox.Transparency
@@ -42,38 +36,130 @@ local function expand(plr)
     end
 end
 
--- Loop ringan sekali tiap 0.1 detik (cukup)
+-- Loop super ringan
 RunService.Heartbeat:Connect(function()
-    if not getgenv().Hitbox.Enabled then return end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        pcall(expand, plr)
+    if getgenv().Hitbox.Enabled then
+        for _, plr in Players:GetPlayers() do
+            pcall(expand, plr)
+        end
     end
 end)
 
--- Respawn & join handler
+-- Respawn handler
 Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function() task.wait(1); expand(p) end)
 end)
-for _, p in ipairs(Players:GetPlayers()) do
+for _, p in Players:GetPlayers() do
     if p.Character then expand(p) end
     p.CharacterAdded:Connect(function() task.wait(1); expand(p) end)
 end
 
--- Simple GUI (Insert = toggle)
-loadstring(game:HttpGet("https://raw.githubusercontent.com/kaan19k/UiLib/main/SimpleUI"))():CreateWindow({
-    Title = "Silent Hitbox 2025",
-    Key = Enum.KeyCode.Insert,
-    Toggles = {
-        {Name = "Hitbox Enabled", Callback = function(v) getgenv().Hitbox.Enabled = v end},
-        {Name = "Team Check",     Callback = function(v) getgenv().Hitbox.TeamCheck = v end, Default = true},
-    },
-    Sliders = {
-        {Name = "Size", Min = 10, Max = 35, Default = 20, Callback = function(v) getgenv().Hitbox.Size = v end},
-    },
-    Buttons = {
-        {Name = "Visible Hitbox (debug)", Callback = function() getgenv().Hitbox.Transparency = getgenv().Hitbox.Transparency == 1 and 0.6 or 1 end},
-        {Name = "Destroy GUI", Callback = function() getgenv().Hitbox.Enabled = false; game:GetService("CoreGui").SimpleUI:Destroy() end},
-    }
-})
+-- Manual GUI (no HTTP, langsung jadi)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SilentHitboxGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
 
-print("Silent Hitbox 2025 loaded — Insert untuk buka GUI")
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 280, 0, 200)
+Frame.Position = UDim2.new(0, 20, 0, 20)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 12)
+local Stroke = Instance.new("UIStroke", Frame)
+Stroke.Color = Color3.fromRGB(0, 255, 0)
+Stroke.Thickness = 3
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,0,0,40)
+Title.BackgroundTransparency = 1
+Title.Text = "TextLabel"
+Title.Text = "Silent Hitbox 2025"
+Title.TextColor3 = Color3.fromRGB(0, 255, 0)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
+
+-- Toggle
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(0.9,0,0,40)
+Toggle.Position = UDim2.new(0.05,0,0,50)
+Toggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Toggle.Text = "OFF"
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.TextScaled = true
+Toggle.Parent = Frame
+Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0,8)
+
+-- Size Slider (textbox + +/-)
+local SizeText = Instance.new("TextLabel")
+SizeText.Size = UDim2.new(1,0,0,30)
+SizeText.Position = UDim2.new(0,0,0,100)
+SizeText.BackgroundTransparency = 1
+SizeText.Text = "Size: 20"
+SizeText.TextColor3 = Color3.new(1,1,1)
+SizeText.TextScaled = true
+SizeText.Parent = Frame
+
+local SizeBox = Instance.new("TextBox")
+SizeBox.Size = UDim2.new(0.6,0,0,35)
+SizeBox.Position = UDim2.new(0.05,0,0,130)
+SizeBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+SizeBox.Text = "20"
+SizeBox.TextColor3 = Color3.new(1,1,1)
+SizeBox.TextScaled = true
+SizeBox.Parent = Frame
+Instance.new("UICorner", SizeBox).CornerRadius = UDim.new(0,6)
+
+local Minus = Instance.new("TextButton", SizeBox)
+Minus.Size = UDim2.new(0.18,0,1,0); Minus.Position = UDim2.new(0.65,0,0,0); Minus.Text = "−"; Minus.BackgroundColor3 = Color3.fromRGB(180,60,60)
+local Plus  = Instance.new("TextButton", SizeBox)
+Plus.Size = UDim2.new(0.18,0,1,0);  Plus.Position  = UDim2.new(0.85,0,0,0);  Plus.Text  = "+"; Plus.BackgroundColor3 = Color3.fromRGB(60,180,60)
+
+-- TeamCheck & Visible
+local TeamBtn = Instance.new("TextButton")
+TeamBtn.Size = UDim2.new(0.9,0,0,35)
+TeamBtn.Position = UDim2.new(0.05,0,0,175)
+TeamBtn.BackgroundColor3 = Color3.fromRGB(60,180,60)
+TeamBtn.Text = "TeamCheck ON"
+TeamBtn.TextColor3 = Color3.new(1,1,1)
+TeamBtn.TextScaled = true
+TeamBtn.Parent = Frame
+Instance.new("UICorner", TeamBtn).CornerRadius = UDim.new(0,6)
+
+-- Event
+Toggle.MouseButton1Click:Connect(function()
+    getgenv().Hitbox.Enabled = not getgenv().Hitbox.Enabled
+    Toggle.Text = getgenv().Hitbox.Enabled and "ON" or "OFF"
+    Toggle.BackgroundColor3 = getgenv().Hitbox.Enabled and Color3.fromRGB(60,180,60) or Color3.fromRGB(200,50,50)
+end)
+
+SizeBox.FocusLost:Connect(function()
+    local val = tonumber(SizeBox.Text) or 20
+    val = math.clamp(val, 10, 40)
+    getgenv().Hitbox.Size = val
+    SizeBox.Text = val
+    SizeText.Text = "Size: " .. val
+end)
+Minus.MouseButton1Click:Connect(function() SizeBox.FocusLost:Fire(SizeBox.Text .. -2) end)
+Plus.MouseButton1Click:Connect(function()  SizeBox.FocusLost:Fire(SizeBox.Text .. +2) end)
+
+TeamBtn.MouseButton1Click:Connect(function()
+    getgenv().Hitbox.TeamCheck = not getgenv().Hitbox.TeamCheck
+    TeamBtn.Text = getgenv().Hitbox.TeamCheck and "TeamCheck ON" or "TeamCheck OFF"
+    TeamBtn.BackgroundColor3 = getgenv().Hitbox.TeamCheck and Color3.fromRGB(60,180,60) or Color3.fromRGB(200,50,50)
+end)
+
+-- Insert = toggle GUI visibility
+UserInputService.InputBegan:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.Insert then
+        Frame.Visible = not Frame.Visible
+    end
+end)
+
+print("Silent Hitbox 2025 loaded — Tekan INSERT untuk sembunyikan/tampilkan GUI")
