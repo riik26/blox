@@ -1,59 +1,291 @@
--- Universal Hitbox Expander R6/R15 v3.0 (Auto-Detect)
-getgenv().HitboxSize = 20  -- Ukuran (10-30 recommended)
-getgenv().TeamCheck = true -- Skip teammate
+-- Universal Hitbox Expander R6/R15 v4.0 (GUI + Anti-Sink)
+-- Credits: Improved for stability
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
+-- Config (bisa diubah via GUI)
+getgenv().HitboxConfig = {
+    Enabled = false,
+    Size = 18,  -- Default 18 (optimal, gak terlalu OP)
+    TeamCheck = true,
+    Visible = false  -- Hitbox invisible (true = semi-visible untuk debug)
+}
+
+-- Parts yang DI-RESIZE (exclude HRP untuk anti-sink!)
+local R15Parts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot"}
+local R6Parts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+
+-- Variables
+local ScreenGui, MainFrame, ToggleBtn, SizeSlider, SizeBox, TeamCheckBox, VisibleBox
+local Connections = {}
+local Debounce = {}
+
+-- Function resize (core)
 local function resizeHitbox(char)
     local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
+    if not humanoid or not getgenv().HitboxConfig.Enabled then return end
     
     local rigType = humanoid.RigType
-    local parts = {}
-    
-    if rigType == Enum.HumanoidRigType.R15 then
-        -- R15 Parts
-        parts = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", 
-                 "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg", 
-                 "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot"}
-    elseif rigType == Enum.HumanoidRigType.R6 then
-        -- R6 Parts
-        parts = {"Head", "HumanoidRootPart", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-    end
+    local parts = (rigType == Enum.HumanoidRigType.R15 and R15Parts) or (rigType == Enum.HumanoidRigType.R6 and R6Parts) or {}
     
     for _, partName in pairs(parts) do
         local part = char:FindFirstChild(partName)
-        if part then
-            part.Size = Vector3.new(getgenv().HitboxSize, getgenv().HitboxSize, getgenv().HitboxSize)
-            part.Transparency = 1
+        if part and part:IsA("BasePart") then
+            part.Size = Vector3.new(getgenv().HitboxConfig.Size, getgenv().HitboxConfig.Size, getgenv().HitboxConfig.Size)
+            part.Transparency = getgenv().HitboxConfig.Visible and 0.8 or 1
             part.CanCollide = false
         end
     end
 end
 
--- Loop utama
-RunService.Heartbeat:Connect(function()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            if getgenv().TeamCheck and player.Team == LocalPlayer.Team then continue end
-            pcall(resizeHitbox, player.Character)
+-- Main loop (efisien)
+local function startLoop()
+    Connections.Loop = RunService.RenderStepped:Connect(function()
+        if not getgenv().HitboxConfig.Enabled then return end
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and Debounce[player] ~= tick() then
+                if getgenv().HitboxConfig.TeamCheck and player.Team == LocalPlayer.Team then continue end
+                pcall(resizeHitbox, player.Character)
+                Debounce[player] = tick()
+            end
         end
+    end)
+end
+
+local function stopLoop()
+    if Connections.Loop then Connections.Loop:Disconnect() end
+end
+
+-- GUI Creation
+local function createGUI()
+    ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "HitboxExpanderGUI"
+    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.ResetOnSpawn = false
+    
+    MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 250, 0, 200)
+    MainFrame.Position = UDim2.new(1, -270, 0, 20)
+    MainFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 12)
+    Corner.Parent = MainFrame
+    
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.new(0, 1, 0)
+    Stroke.Thickness = 2
+    Stroke.Parent = MainFrame
+    
+    -- Title
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "Hitbox Expander v4.0"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.TextScaled = true
+    Title.Font = Enum.Font.GothamBold
+    Title.Parent = MainFrame
+    
+    -- Toggle Button
+    ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Size = UDim2.new(0.9, 0, 0, 35)
+    ToggleBtn.Position = UDim2.new(0.05, 0, 0, 50)
+    ToggleBtn.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
+    ToggleBtn.Text = "OFF (Click to ON)"
+    ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+    ToggleBtn.TextScaled = true
+    ToggleBtn.Font = Enum.Font.Gotham
+    ToggleBtn.Parent = MainFrame
+    
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 8)
+    BtnCorner.Parent = ToggleBtn
+    
+    -- Size Slider (simple textbox + buttons)
+    local SizeLabel = Instance.new("TextLabel")
+    SizeLabel.Size = UDim2.new(1, 0, 0, 25)
+    SizeLabel.Position = UDim2.new(0, 0, 0, 95)
+    SizeLabel.BackgroundTransparency = 1
+    SizeLabel.Text = "Size: 18"
+    SizeLabel.TextColor3 = Color3.new(1, 1, 1)
+    SizeLabel.TextScaled = true
+    SizeLabel.Font = Enum.Font.Gotham
+    SizeLabel.Parent = MainFrame
+    
+    SizeBox = Instance.new("TextBox")
+    SizeBox.Size = UDim2.new(0.6, 0, 0, 30)
+    SizeBox.Position = UDim2.new(0.05, 0, 0, 120)
+    SizeBox.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    SizeBox.Text = "18"
+    SizeBox.TextColor3 = Color3.new(1, 1, 1)
+    SizeBox.TextScaled = true
+    SizeBox.Font = Enum.Font.Gotham
+    SizeBox.Parent = MainFrame
+    
+    local SizeCorner = Instance.new("UICorner")
+    SizeCorner.CornerRadius = UDim.new(0, 6)
+    SizeCorner.Parent = SizeBox
+    
+    -- +/- Buttons
+    local MinusBtn = Instance.new("TextButton")
+    MinusBtn.Size = UDim2.new(0.15, 0, 1, 0)
+    MinusBtn.Position = UDim2.new(0.68, 0, 0, 0)
+    MinusBtn.BackgroundColor3 = Color3.new(0.8, 0.3, 0.3)
+    MinusBtn.Text = "-"
+    MinusBtn.TextScaled = true
+    MinusBtn.Parent = SizeBox
+    local PlusBtn = Instance.new("TextButton")
+    PlusBtn.Size = UDim2.new(0.15, 0, 1, 0)
+    PlusBtn.Position = UDim2.new(0.85, 0, 0, 0)
+    PlusBtn.BackgroundColor3 = Color3.new(0.3, 0.8, 0.3)
+    PlusBtn.Text = "+"
+    PlusBtn.TextScaled = true
+    PlusBtn.Parent = SizeBox
+    
+    -- TeamCheck Checkbox
+    TeamCheckBox = Instance.new("TextButton")
+    TeamCheckBox.Size = UDim2.new(0.9, 0, 0, 25)
+    TeamCheckBox.Position = UDim2.new(0.05, 0, 0, 155)
+    TeamCheckBox.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
+    TeamCheckBox.Text = "✓ TeamCheck ON"
+    TeamCheckBox.TextColor3 = Color3.new(1, 1, 1)
+    TeamCheckBox.TextScaled = true
+    TeamCheckBox.Font = Enum.Font.Gotham
+    TeamCheckBox.Parent = MainFrame
+    
+    -- Visible Checkbox
+    VisibleBox = Instance.new("TextButton")
+    VisibleBox.Size = UDim2.new(0.9, 0, 0, 25)
+    VisibleBox.Position = UDim2.new(0.05, 0, 0, 185)
+    VisibleBox.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
+    VisibleBox.Text = "✗ Visible OFF"
+    VisibleBox.TextColor3 = Color3.new(1, 1, 1)
+    VisibleBox.TextScaled = true
+    VisibleBox.Font = Enum.Font.Gotham
+    VisibleBox.Parent = MainFrame
+    
+    -- Animasi hover
+    local function tweenBtn(btn, color)
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
+    end
+    
+    -- Toggle Logic
+    ToggleBtn.MouseButton1Click:Connect(function()
+        getgenv().HitboxConfig.Enabled = not getgenv().HitboxConfig.Enabled
+        ToggleBtn.Text = getgenv().HitboxConfig.Enabled and "ON (Click to OFF)" or "OFF (Click to ON)"
+        ToggleBtn.BackgroundColor3 = getgenv().HitboxConfig.Enabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2)
+        if getgenv().HitboxConfig.Enabled then
+            startLoop()
+            for _, player in pairs(Players:GetPlayers()) do
+                if player.Character then pcall(resizeHitbox, player.Character) end
+            end
+        else
+            stopLoop()
+        end
+    end)
+    
+    -- Size Logic
+    SizeBox.FocusLost:Connect(function()
+        local newSize = tonumber(SizeBox.Text) or 18
+        newSize = math.clamp(newSize, 10, 50)
+        getgenv().HitboxConfig.Size = newSize
+        SizeBox.Text = tostring(newSize)
+        SizeLabel.Text = "Size: " .. newSize
+    end)
+    
+    MinusBtn.MouseButton1Click:Connect(function()
+        local newSize = math.max(10, getgenv().HitboxConfig.Size - 2)
+        getgenv().HitboxConfig.Size = newSize
+        SizeBox.Text = tostring(newSize)
+        SizeLabel.Text = "Size: " .. newSize
+    end)
+    
+    PlusBtn.MouseButton1Click:Connect(function()
+        local newSize = math.min(50, getgenv().HitboxConfig.Size + 2)
+        getgenv().HitboxConfig.Size = newSize
+        SizeBox.Text = tostring(newSize)
+        SizeLabel.Text = "Size: " .. newSize
+    end)
+    
+    -- TeamCheck Toggle
+    TeamCheckBox.MouseButton1Click:Connect(function()
+        getgenv().HitboxConfig.TeamCheck = not getgenv().HitboxConfig.TeamCheck
+        TeamCheckBox.Text = getgenv().HitboxConfig.TeamCheck and "✓ TeamCheck ON" or "✗ TeamCheck OFF"
+        TeamCheckBox.BackgroundColor3 = getgenv().HitboxConfig.TeamCheck and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2)
+    end)
+    
+    -- Visible Toggle
+    VisibleBox.MouseButton1Click:Connect(function()
+        getgenv().HitboxConfig.Visible = not getgenv().HitboxConfig.Visible
+        VisibleBox.Text = getgenv().HitboxConfig.Visible and "✓ Visible ON" or "✗ Visible OFF"
+        VisibleBox.BackgroundColor3 = getgenv().HitboxConfig.Visible and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2)
+    end)
+    
+    -- Hover effects
+    for _, btn in pairs({ToggleBtn, TeamCheckBox, VisibleBox, MinusBtn, PlusBtn}) do
+        btn.MouseEnter:Connect(function() tweenBtn(btn, Color3.new(0.3, 0.9, 0.3)) end)
+        btn.MouseLeave:Connect(function()
+            local col = (btn == ToggleBtn and (getgenv().HitboxConfig.Enabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2))) or
+                        (btn == TeamCheckBox and (getgenv().HitboxConfig.TeamCheck and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2))) or
+                        (btn == VisibleBox and (getgenv().HitboxConfig.Visible and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2))) or
+                        Color3.new(0.2, 0.2, 0.2)
+            tweenBtn(btn, col)
+        end)
+    end
+end
+
+-- Keybind Toggle
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Insert then
+        getgenv().HitboxConfig.Enabled = not getgenv().HitboxConfig.Enabled
+        if ScreenGui and ScreenGui:FindFirstChild("MainFrame") then
+            local btn = ScreenGui.MainFrame:FindFirstChild("TextButton")  -- ToggleBtn
+            if btn then
+                btn.Text = getgenv().HitboxConfig.Enabled and "ON (Click to OFF)" or "OFF (Click to ON)"
+                btn.BackgroundColor3 = getgenv().HitboxConfig.Enabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.8, 0.2, 0.2)
+            end
+        end
+        if getgenv().HitboxConfig.Enabled then startLoop() else stopLoop() end
+    elseif input.KeyCode == Enum.KeyCode.Delete then
+        -- Kill GUI
+        if ScreenGui then ScreenGui:Destroy() end
+        stopLoop()
+        print("Hitbox Expander dihapus!")
     end
 end)
 
--- Handle spawn/join
-Players.PlayerAdded:Connect(function(player)
+-- Handle players
+local function onPlayerAdded(player)
     player.CharacterAdded:Connect(function(char)
-        task.wait(0.5)
-        pcall(resizeHitbox, char)
+        task.wait(1)  -- Tunggu full load
+        if getgenv().HitboxConfig.Enabled then
+            pcall(resizeHitbox, char)
+        end
     end)
-end)
-
-for _, player in pairs(Players:GetPlayers()) do
-    if player.Character then pcall(resizeHitbox, player.Character) end
-    player.CharacterAdded:Connect(function(char) task.wait(0.5); pcall(resizeHitbox, char) end)
 end
 
-print("Universal Hitbox Expander R6/R15 AKTIF! Size: " .. getgenv().HitboxSize)
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then onPlayerAdded(player) end
+end
+
+-- Init GUI
+createGUI()
+print("Hitbox Expander v4.0 AKTIF! GUI di kanan atas. Insert=Toggle, Delete=Kill.")
+
+-- Auto-cleanup on leave
+LocalPlayer.AncestryChanged:Connect(function()
+    if not LocalPlayer.Parent then
+        stopLoop()
+        if ScreenGui then ScreenGui:Destroy() end
+    end
+end)
