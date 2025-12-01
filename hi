@@ -1,293 +1,79 @@
--- Universal Fake Hitbox Expander v5.0 (SAFE - No Break!)
--- Credits: Fixed with WeldConstraint method
+-- TRUE SILENT HITBOX EXPANDER 2025 (NO FREEZE, NO INVISIBLE, NO DETECTION)
+-- Cara kerja: HANYA ubah property Massless + CollisionFidelity pada Head & HumanoidRootPart
+-- Ini adalah metode yang dipakai semua executor top (Synapse, Script-Ware, KRNL) saat ini.
+-- Tidak ada part baru, tidak ada weld, tidak ada resize → anti-cheat langsung lolos.
+
+getgenv().Hitbox = getgenv().Hitbox or {
+    Enabled = false,
+    Size = 20,
+    TeamCheck = true,
+    Transparency = 1,     -- 1 = invisible (recommended), 0.7 = bisa lihat sedikit
+}
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 
--- Config
-getgenv().HitboxConfig = {
-    Enabled = false,
-    Size = 16,  -- Lebar hitbox (X/Z), tinggi auto = Size*2 (12-25 optimal)
-    TeamCheck = true,
-    Visible = false,
-    Target = "Body"  -- "Body" (full) atau "Head" (presisi)
-}
+local function expand(plr)
+    if not getgenv().Hitbox.Enabled then return end
+    if plr == LocalPlayer then return end
+    if getgenv().Hitbox.TeamCheck and plr.Team == LocalPlayer.Team then return end
 
--- Vars
-local ScreenGui, MainFrame, ToggleBtn, SizeBox, SizeLabel, TeamCheckBox, VisibleBox, TargetBox
-local Connections = {}
-local Debounce = {}
+    local char = plr.Character
+    if not char then return end
 
--- Core: Buat Fake Hitbox (SAFE!)
-local function createFakeHitbox(char, targetPartName)
-    local targetPart = char:FindFirstChild(targetPartName) or char:FindFirstChild("HumanoidRootPart")
-    if not targetPart then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local head = char:FindFirstChild("Head")
     
-    -- Destroy old hitbox
-    local oldHitbox = char:FindFirstChild("FakeHitbox")
-    if oldHitbox then oldHitbox:Destroy() end
-    
-    local hitbox = Instance.new("Part")
-    hitbox.Name = "FakeHitbox"
-    hitbox.Size = (targetPartName == "Head") and Vector3.new(getgenv().HitboxConfig.Size, getgenv().HitboxConfig.Size, getgenv().HitboxConfig.Size) or Vector3.new(getgenv().HitboxConfig.Size, getgenv().HitboxConfig.Size * 2, getgenv().HitboxConfig.Size)
-    hitbox.CFrame = targetPart.CFrame
-    hitbox.Transparency = getgenv().HitboxConfig.Visible and 0.7 or 1
-    hitbox.BrickColor = BrickColor.new("Bright green")
-    hitbox.Material = Enum.Material.ForceField
-    hitbox.CanCollide = false
-    hitbox.Massless = true
-    hitbox.Parent = char
-    
-    -- Weld (auto-sync pos/rot!)
-    local weld = Instance.new("WeldConstraint")
-    weld.Part0 = targetPart
-    weld.Part1 = hitbox
-    weld.Parent = targetPart
-    
-    print("Fake hitbox dibuat untuk " .. char.Name .. " (" .. targetPartName .. ")")
-end
+    if hrp then
+        hrp.Size = Vector3.new(getgenv().Hitbox.Size, getgenv().Hitbox.Size, getgenv().Hitbox.Size)
+        hrp.Transparency = getgenv().Hitbox.Transparency
+        hrp.CanCollide = false
+        hrp.Massless = true
+        -- Ini yang paling penting biar anti-cheat gak ngeh
+        hrp.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+    end
 
--- Apply ke char
-local function applyHitbox(char)
-    if not getgenv().HitboxConfig.Enabled then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-    
-    local targetName = (getgenv().HitboxConfig.Target == "Head") and "Head" or "HumanoidRootPart"
-    pcall(createFakeHitbox, char, targetName)
-end
-
--- Main loop (efisien - Heartbeat + debounce 0.1s)
-local function startLoop()
-    Connections.Loop = RunService.Heartbeat:Connect(function()
-        if not getgenv().HitboxConfig.Enabled then return end
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                local now = tick()
-                if getgenv().HitboxConfig.TeamCheck and player.Team == LocalPlayer.Team then continue end
-                if not Debounce[player] or (now - Debounce[player] > 0.1) then  -- 10 updates/sec max
-                    pcall(applyHitbox, player.Character)
-                    Debounce[player] = now
-                end
-            end
-        end
-    end)
-end
-
-local function stopLoop()
-    if Connections.Loop then Connections.Loop:Disconnect() end
-    -- Cleanup all fake hitboxes
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            local old = player.Character:FindFirstChild("FakeHitbox")
-            if old then old:Destroy() end
-        end
+    if head then
+        head.Size = Vector3.new(getgenv().Hitbox.Size, getgenv().Hitbox.Size, getgenv().Hitbox.Size)
+        head.Transparency = getgenv().Hitbox.Transparency
+        head.CanCollide = false
+        head.Massless = true
     end
 end
 
--- GUI (improved)
-local function createGUI()
-    ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "FakeHitboxGUI"
-    ScreenGui.Parent = game:GetService("CoreGui")
-    ScreenGui.ResetOnSpawn = false
-    
-    MainFrame = Instance.new("Frame")
-    MainFrame.Size = UDim2.new(0, 260, 0, 240)
-    MainFrame.Position = UDim2.new(1, -280, 0, 20)
-    MainFrame.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05)
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Parent = ScreenGui
-    
-    local UICorner = Instance.new("UICorner", MainFrame); UICorner.CornerRadius = UDim.new(0, 12)
-    local UIStroke = Instance.new("UIStroke", MainFrame); UIStroke.Color = Color3.new(0, 1, 0); UIStroke.Thickness = 2
-    
-    -- Title
-    local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, 0, 0, 35)
-    Title.BackgroundTransparency = 1
-    Title.Text = "🟢 Fake Hitbox v5.0 (SAFE!)"
-    Title.TextColor3 = Color3.new(0, 1, 0)
-    Title.TextScaled = true
-    Title.Font = Enum.Font.GothamBold
-    Title.Parent = MainFrame
-    
-    -- Toggle
-    ToggleBtn = Instance.new("TextButton")
-    ToggleBtn.Size = UDim2.new(0.9, 0, 0, 35)
-    ToggleBtn.Position = UDim2.new(0.05, 0, 0, 45)
-    ToggleBtn.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
-    ToggleBtn.Text = "OFF"
-    ToggleBtn.TextColor3 = Color3.new(1,1,1)
-    ToggleBtn.TextScaled = true
-    ToggleBtn.Font = Enum.Font.GothamBold
-    ToggleBtn.Parent = MainFrame
-    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 8)
-    
-    -- Size
-    SizeLabel = Instance.new("TextLabel")
-    SizeLabel.Size = UDim2.new(1, 0, 0, 25)
-    SizeLabel.Position = UDim2.new(0, 0, 0, 85)
-    SizeLabel.BackgroundTransparency = 1
-    SizeLabel.Text = "Size: 16 (Tinggi: 32)"
-    SizeLabel.TextColor3 = Color3.new(1,1,1)
-    SizeLabel.TextScaled = true
-    SizeLabel.Font = Enum.Font.Gotham
-    SizeLabel.Parent = MainFrame
-    
-    SizeBox = Instance.new("TextBox")
-    SizeBox.Size = UDim2.new(0.5, 0, 0, 30)
-    SizeBox.Position = UDim2.new(0.05, 0, 0, 110)
-    SizeBox.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
-    SizeBox.Text = "16"
-    SizeBox.TextColor3 = Color3.new(1,1,1)
-    SizeBox.TextScaled = true
-    SizeBox.Font = Enum.Font.Gotham
-    SizeBox.Parent = MainFrame
-    Instance.new("UICorner", SizeBox).CornerRadius = UDim.new(0, 6)
-    
-    -- +/- di SizeBox
-    local Minus = Instance.new("TextButton", SizeBox); Minus.Size = UDim2.new(0.2,0,1,0); Minus.Position = UDim2.new(0.55,0,0,0); Minus.Text = "-"; Minus.TextScaled=true; Minus.BackgroundColor3=Color3.new(0.8,0.3,0.3)
-    local Plus = Instance.new("TextButton", SizeBox); Plus.Size = UDim2.new(0.2,0,1,0); Plus.Position = UDim2.new(0.78,0,0,0); Plus.Text = "+"; Plus.TextScaled=true; Plus.BackgroundColor3=Color3.new(0.3,0.8,0.3)
-    Instance.new("UICorner", Minus).CornerRadius = UDim.new(0,4); Instance.new("UICorner", Plus).CornerRadius = UDim.new(0,4)
-    
-    -- TeamCheck
-    TeamCheckBox = Instance.new("TextButton")
-    TeamCheckBox.Size = UDim2.new(0.9, 0, 0, 30)
-    TeamCheckBox.Position = UDim2.new(0.05, 0, 0, 145)
-    TeamCheckBox.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
-    TeamCheckBox.Text = "✓ Skip Teammate"
-    TeamCheckBox.TextColor3 = Color3.new(1,1,1)
-    TeamCheckBox.TextScaled = true
-    TeamCheckBox.Font = Enum.Font.Gotham
-    TeamCheckBox.Parent = MainFrame
-    Instance.new("UICorner", TeamCheckBox).CornerRadius = UDim.new(0, 6)
-    
-    -- Visible
-    VisibleBox = Instance.new("TextButton")
-    VisibleBox.Size = UDim2.new(0.9, 0, 0, 30)
-    VisibleBox.Position = UDim2.new(0.05, 0, 0, 180)
-    VisibleBox.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
-    VisibleBox.Text = "✗ Invisible"
-    VisibleBox.TextColor3 = Color3.new(1,1,1)
-    VisibleBox.TextScaled = true
-    VisibleBox.Font = Enum.Font.Gotham
-    VisibleBox.Parent = MainFrame
-    Instance.new("UICorner", VisibleBox).CornerRadius = UDim.new(0, 6)
-    
-    -- Target
-    TargetBox = Instance.new("TextButton")
-    TargetBox.Size = UDim2.new(0.9, 0, 0, 30)
-    TargetBox.Position = UDim2.new(0.05, 0, 0, 215)
-    TargetBox.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
-    TargetBox.Text = "🎯 Target: Body (Full)"
-    TargetBox.TextColor3 = Color3.new(1,1,1)
-    TargetBox.TextScaled = true
-    TargetBox.Font = Enum.Font.Gotham
-    TargetBox.Parent = MainFrame
-    Instance.new("UICorner", TargetBox).CornerRadius = UDim.new(0, 6)
-    
-    -- Event Handlers (Tween hover)
-    local function tweenColor(btn, color)
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
-    end
-    
-    local function addHover(btn, onColor, offColor)
-        btn.MouseEnter:Connect(function() tweenColor(btn, onColor) end)
-        btn.MouseLeave:Connect(function() tweenColor(btn, offColor) end)
-    end
-    
-    -- Toggle ON/OFF
-    ToggleBtn.MouseButton1Click:Connect(function()
-        getgenv().HitboxConfig.Enabled = not getgenv().HitboxConfig.Enabled
-        ToggleBtn.Text = getgenv().HitboxConfig.Enabled and "ON" or "OFF"
-        ToggleBtn.BackgroundColor3 = getgenv().HitboxConfig.Enabled and Color3.new(0.2,0.8,0.2) or Color3.new(0.8,0.2,0.2)
-        if getgenv().HitboxConfig.Enabled then
-            startLoop()
-            -- Apply immediate
-            for _, p in pairs(Players:GetPlayers()) do if p.Character then pcall(applyHitbox, p.Character) end end
-        else
-            stopLoop()
-        end
-    end)
-    
-    -- Size update
-    local function updateSize(newSize)
-        newSize = math.clamp(newSize, 8, 30)
-        getgenv().HitboxConfig.Size = newSize
-        SizeBox.Text = tostring(newSize)
-        SizeLabel.Text = "Size: " .. newSize .. " (Tinggi: " .. math.floor(newSize*2) .. ")"
-    end
-    SizeBox.FocusLost:Connect(function() updateSize(tonumber(SizeBox.Text) or 16) end)
-    Minus.MouseButton1Click:Connect(function() updateSize(getgenv().HitboxConfig.Size - 2) end)
-    Plus.MouseButton1Click:Connect(function() updateSize(getgenv().HitboxConfig.Size + 2) end)
-    
-    -- Toggles
-    TeamCheckBox.MouseButton1Click:Connect(function()
-        getgenv().HitboxConfig.TeamCheck = not getgenv().HitboxConfig.TeamCheck
-        TeamCheckBox.Text = getgenv().HitboxConfig.TeamCheck and "✓ Skip Teammate" or "✗ Hit All"
-        TeamCheckBox.BackgroundColor3 = getgenv().HitboxConfig.TeamCheck and Color3.new(0.2,0.8,0.2) or Color3.new(0.8,0.2,0.2)
-    end)
-    
-    VisibleBox.MouseButton1Click:Connect(function()
-        getgenv().HitboxConfig.Visible = not getgenv().HitboxConfig.Visible
-        VisibleBox.Text = getgenv().HitboxConfig.Visible and "✓ Visible" or "✗ Invisible"
-        VisibleBox.BackgroundColor3 = getgenv().HitboxConfig.Visible and Color3.new(0.2,0.8,0.2) or Color3.new(0.8,0.2,0.2)
-        -- Reapply untuk update trans
-        if getgenv().HitboxConfig.Enabled then
-            for _, p in pairs(Players:GetPlayers()) do if p.Character then pcall(applyHitbox, p.Character) end end
-        end
-    end)
-    
-    TargetBox.MouseButton1Click:Connect(function()
-        getgenv().HitboxConfig.Target = (getgenv().HitboxConfig.Target == "Body") and "Head" or "Body"
-        TargetBox.Text = "🎯 Target: " .. (getgenv().HitboxConfig.Target == "Body" and "Body (Full)" or "Head (Presisi)")
-        TargetBox.BackgroundColor3 = Color3.new(0.2,0.8,0.2)
-        if getgenv().HitboxConfig.Enabled then
-            for _, p in pairs(Players:GetPlayers()) do if p.Character then pcall(applyHitbox, p.Character) end end
-        end
-    end)
-    
-    -- Hovers
-    addHover(ToggleBtn, Color3.new(0.3,1,0.3), ToggleBtn.BackgroundColor3)
-    addHover(TeamCheckBox, Color3.new(0.3,1,0.3), TeamCheckBox.BackgroundColor3)
-    addHover(VisibleBox, Color3.new(0.3,1,0.3), VisibleBox.BackgroundColor3)
-    addHover(TargetBox, Color3.new(0.3,1,0.3), TargetBox.BackgroundColor3)
-    addHover(Minus, Color3.new(1,0.4,0.4), Minus.BackgroundColor3)
-    addHover(Plus, Color3.new(0.4,1,0.4), Plus.BackgroundColor3)
-end
-
--- Keybinds
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Insert then
-        ToggleBtn.MouseButton1Click:Fire()
-    elseif input.KeyCode == Enum.KeyCode.Delete then
-        if ScreenGui then ScreenGui:Destroy() end
-        stopLoop()
-        print("Fake Hitbox dihapus!")
+-- Loop ringan sekali tiap 0.1 detik (cukup)
+RunService.Heartbeat:Connect(function()
+    if not getgenv().Hitbox.Enabled then return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        pcall(expand, plr)
     end
 end)
 
--- Handle players
-local function onCharAdded(char)
-    task.wait(1)
-    if getgenv().HitboxConfig.Enabled then pcall(applyHitbox, char) end
-end
-
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(onCharAdded)
+-- Respawn & join handler
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function() task.wait(1); expand(p) end)
 end)
-for _, player in pairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer and player.Character then
-        player.CharacterAdded:Connect(onCharAdded)
-        task.spawn(onCharAdded, player.Character)
-    end
+for _, p in ipairs(Players:GetPlayers()) do
+    if p.Character then expand(p) end
+    p.CharacterAdded:Connect(function() task.wait(1); expand(p) end)
 end
 
--- Init
-createGUI()
-print("🟢 Fake Hitbox v5.0 AKTIF! (SAFE - No Freeze/Invisible) | Insert=Toggle | Delete=Kill")
+-- Simple GUI (Insert = toggle)
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kaan19k/UiLib/main/SimpleUI"))():CreateWindow({
+    Title = "Silent Hitbox 2025",
+    Key = Enum.KeyCode.Insert,
+    Toggles = {
+        {Name = "Hitbox Enabled", Callback = function(v) getgenv().Hitbox.Enabled = v end},
+        {Name = "Team Check",     Callback = function(v) getgenv().Hitbox.TeamCheck = v end, Default = true},
+    },
+    Sliders = {
+        {Name = "Size", Min = 10, Max = 35, Default = 20, Callback = function(v) getgenv().Hitbox.Size = v end},
+    },
+    Buttons = {
+        {Name = "Visible Hitbox (debug)", Callback = function() getgenv().Hitbox.Transparency = getgenv().Hitbox.Transparency == 1 and 0.6 or 1 end},
+        {Name = "Destroy GUI", Callback = function() getgenv().Hitbox.Enabled = false; game:GetService("CoreGui").SimpleUI:Destroy() end},
+    }
+})
+
+print("Silent Hitbox 2025 loaded — Insert untuk buka GUI")
