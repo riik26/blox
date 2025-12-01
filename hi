@@ -1,0 +1,59 @@
+-- Universal Hitbox Expander R6/R15 v3.0 (Auto-Detect)
+getgenv().HitboxSize = 20  -- Ukuran (10-30 recommended)
+getgenv().TeamCheck = true -- Skip teammate
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local function resizeHitbox(char)
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    local rigType = humanoid.RigType
+    local parts = {}
+    
+    if rigType == Enum.HumanoidRigType.R15 then
+        -- R15 Parts
+        parts = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", 
+                 "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg", 
+                 "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot"}
+    elseif rigType == Enum.HumanoidRigType.R6 then
+        -- R6 Parts
+        parts = {"Head", "HumanoidRootPart", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+    end
+    
+    for _, partName in pairs(parts) do
+        local part = char:FindFirstChild(partName)
+        if part then
+            part.Size = Vector3.new(getgenv().HitboxSize, getgenv().HitboxSize, getgenv().HitboxSize)
+            part.Transparency = 1
+            part.CanCollide = false
+        end
+    end
+end
+
+-- Loop utama
+RunService.Heartbeat:Connect(function()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            if getgenv().TeamCheck and player.Team == LocalPlayer.Team then continue end
+            pcall(resizeHitbox, player.Character)
+        end
+    end
+end)
+
+-- Handle spawn/join
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        pcall(resizeHitbox, char)
+    end)
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    if player.Character then pcall(resizeHitbox, player.Character) end
+    player.CharacterAdded:Connect(function(char) task.wait(0.5); pcall(resizeHitbox, char) end)
+end
+
+print("Universal Hitbox Expander R6/R15 AKTIF! Size: " .. getgenv().HitboxSize)
