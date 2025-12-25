@@ -1,41 +1,55 @@
--- CLIENT TEST ONLY
--- Force all invisible players to visible
-
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 
 --------------------------------------------------
--- CORE FUNCTION
+-- CONFIG
 --------------------------------------------------
 
-local function forceVisibleCharacter(character)
-	for _, obj in ipairs(character:GetDescendants()) do
+-- Nama-nama part penutup yang ingin diabaikan
+local BLOCK_NAMES = {
+	["Cover"] = true,
+	["BlindBlock"] = true,
+	["InvisibleBlock"] = true,
+	["Disguise"] = true
+}
 
-		-- Parts
+--------------------------------------------------
+-- CORE
+--------------------------------------------------
+
+local function forcePureBody(character)
+	for _, obj in ipairs(character:GetChildren()) do
+
+		-- 1. HAPUS / SEMBUNYIKAN BLOCK PENUTUP
+		if obj:IsA("BasePart") and BLOCK_NAMES[obj.Name] then
+			obj.Transparency = 1
+			obj.CanCollide = false
+			obj.CanQuery = false
+			obj.CanTouch = false
+		end
+	end
+
+	-- 2. PASTIKAN BODY ASLI TERLIHAT
+	for _, obj in ipairs(character:GetDescendants()) do
 		if obj:IsA("BasePart") then
-			obj.Transparency = 0
 			obj.LocalTransparencyModifier = 0
+			obj.Transparency = 0
 			obj.CastShadow = true
 
-		-- Decals / Textures
 		elseif obj:IsA("Decal") or obj:IsA("Texture") then
 			obj.Transparency = 0
-
-		-- Particle / Trail safety
-		elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-			obj.Enabled = true
 		end
 	end
 end
 
 --------------------------------------------------
--- APPLY TO ALL PLAYERS
+-- APPLY
 --------------------------------------------------
 
-local function forceVisibleAllPlayers()
+local function applyToAll()
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= localPlayer and player.Character then
-			forceVisibleCharacter(player.Character)
+			forcePureBody(player.Character)
 		end
 	end
 end
@@ -45,31 +59,29 @@ end
 --------------------------------------------------
 
 local function bindPlayer(player)
-	player.CharacterAdded:Connect(function(character)
+	player.CharacterAdded:Connect(function(char)
 		task.wait(0.1)
-		forceVisibleCharacter(character)
+		forcePureBody(char)
 	end)
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
 	bindPlayer(p)
 	if p.Character then
-		forceVisibleCharacter(p.Character)
+		forcePureBody(p.Character)
 	end
 end
 
 Players.PlayerAdded:Connect(bindPlayer)
 
 --------------------------------------------------
--- TEST TRIGGER
+-- MANUAL TEST
 --------------------------------------------------
--- Tekan R untuk force visible ulang
+-- Tekan R untuk re-apply
 
-local UserInputService = game:GetService("UserInputService")
-
-UserInputService.InputBegan:Connect(function(input, gp)
+game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.R then
-		forceVisibleAllPlayers()
+		applyToAll()
 	end
 end)
