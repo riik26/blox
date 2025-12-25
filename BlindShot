@@ -1,12 +1,26 @@
+-- CLIENT TEST ONLY
+-- Reveal via GUI saat battle phase
+
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 
--- State
-local revealEnabled = false
+--------------------------------------------------
+-- STATE
+--------------------------------------------------
+
+local battleActive = false
+local revealUsed = false
 local highlights = {}
 
 --------------------------------------------------
--- APPLY REVEAL
+-- GUI
+--------------------------------------------------
+
+local button = script.Parent
+button.Visible = false
+
+--------------------------------------------------
+-- REVEAL CORE
 --------------------------------------------------
 
 local function applyReveal(player)
@@ -16,7 +30,7 @@ local function applyReveal(player)
 
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "RevealHighlight"
-	highlight.FillColor = Color3.fromRGB(255, 80, 80)
+	highlight.FillColor = Color3.fromRGB(255, 70, 70)
 	highlight.FillTransparency = 0.45
 	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 	highlight.OutlineTransparency = 0
@@ -27,77 +41,71 @@ local function applyReveal(player)
 	highlights[player] = highlight
 end
 
---------------------------------------------------
--- REMOVE REVEAL
---------------------------------------------------
-
-local function removeReveal(player)
-	local highlight = highlights[player]
-	if highlight then
-		highlight:Destroy()
-		highlights[player] = nil
-	end
-end
-
---------------------------------------------------
--- ENABLE / DISABLE
---------------------------------------------------
-
-local function enableReveal()
-	if revealEnabled then return end
-	revealEnabled = true
-
+local function revealAllPlayers()
 	for _, player in ipairs(Players:GetPlayers()) do
 		applyReveal(player)
 	end
 end
 
-local function disableReveal()
-	if not revealEnabled then return end
-	revealEnabled = false
-
-	for player, _ in pairs(highlights) do
-		removeReveal(player)
-	end
-end
-
 --------------------------------------------------
--- HANDLE JOIN / RESPAWN
+-- HANDLE RESPAWN / JOIN
 --------------------------------------------------
 
-Players.PlayerAdded:Connect(function(player)
-	if not revealEnabled then return end
-
+local function bindCharacter(player)
 	player.CharacterAdded:Connect(function()
-		task.wait(0.1)
-		applyReveal(player)
-	end)
-end)
-
-for _, player in ipairs(Players:GetPlayers()) do
-	player.CharacterAdded:Connect(function()
-		if revealEnabled then
+		if battleActive and revealUsed then
 			task.wait(0.1)
 			applyReveal(player)
 		end
 	end)
 end
 
+for _, p in ipairs(Players:GetPlayers()) do
+	bindCharacter(p)
+end
+
+Players.PlayerAdded:Connect(bindCharacter)
+
 --------------------------------------------------
--- TEST CONTROLS
+-- GUI CLICK
 --------------------------------------------------
--- Tekan:
--- R → Reveal ON
--- T → Reveal OFF
+
+button.MouseButton1Click:Connect(function()
+	if not battleActive then return end
+	if revealUsed then return end
+
+	revealUsed = true
+	button.Visible = false
+
+	revealAllPlayers()
+end)
+
+--------------------------------------------------
+-- SIMULASI BATTLE PHASE
+-- GANTI INI DENGAN REMOTE EVENT DARI SERVER NANTI
+--------------------------------------------------
+
+-- TEST:
+-- Tekan B = masuk battle
+-- Tekan N = keluar battle
 
 local UserInputService = game:GetService("UserInputService")
 
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 
-	if input.KeyCode == Enum.KeyCode.R then
-		enableReveal()
-	elseif input.KeyCode == Enum.KeyCode.T then
-		disableReveal()
+	if input.KeyCode == Enum.KeyCode.B then
+		battleActive = true
+		revealUsed = false
+		button.Visible = true
+
+	elseif input.KeyCode == Enum.KeyCode.N then
+		battleActive = false
+		button.Visible = false
+
+		for _, h in pairs(highlights) do
+			if h then h:Destroy() end
+		end
+		table.clear(highlights)
 	end
 end)
